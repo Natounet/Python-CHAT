@@ -1,4 +1,4 @@
-# Python-CHAT
+# Python-CHAT v1
 A basic python chat client and server
 
 Fonctionnalités actuelles:

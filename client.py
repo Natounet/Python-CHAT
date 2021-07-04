@@ -104,7 +104,7 @@ while True:
             # Quand on reçoit un message
             if sockets == s:
                 message = receive(s)
-                liste_message += (message)
+                print(message)
                 affichage()
                 
 

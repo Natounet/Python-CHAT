@@ -8,10 +8,17 @@ import sys
 CYAN = '\033[1;36;48m'
 END = '\033[1;37;0m'
 
+#------------------------------------------ Classes -------------------------
+
+class User:
+
+    def __init__(self, params, username, public_key=""):
+        self.conn = params[0]
+        self.addr = params[1]
+        self.username = username 
+        self.public_key = public_key
 
 #------------------------------------------ Fonctions -------------------------
-
-
 
 def logging(message,date):
     ''' Str,str -> None
@@ -33,60 +40,76 @@ def send(s,message):
     s.sendall(bytes(message+'\n','utf-8'))
     return
 
+def recuperer_utilisateurs():
+    ''' None -> Str 
+    Récupère le nom d'utilisateur de tous les utilisateurs présents'''
+    
+    usernames = []
+    for user in client_list:
+        usernames.append(user.username)
+
+    return usernames
+
 def broadcast(conn='',message='',self=True):
     ''' Socket, Str, Bool -> None
         Etant donnée que côté client on ne sauvegarde pas ce que l'on a envoyé mais la conversation entière
         On va envoyé le message à tout le monde, y compris l'envoyeur ( sauf si self=False'''
 
-    for clients in client_list:
+    for user in client_list:
         # Si l'on ne veut pas envoyé le message à l'envoyeur
-        if clients == conn and self==False:
+        if user.conn == conn and self==False:
             continue
         try:
-            send(clients,message)
+            send(user.conn,message)
         except: # Si le socket est mort
-            clients.close()
-            client_list.remove(clients)
-            print(f"{conn} s'est déconnecté")
+            user.conn.close()
+            client_list.remove(user)
+            print(f"{user.conn} s'est déconnecté")
 
 
 
-def clientthread(conn,addr, username):
-    ''' Socket, ? , Str -> None
+def clientthread(User):
+    ''' User ( conn, addr, username, public_key) -> None
         Fonction s'occupant de chaques clients, elle est appelée à la création des threads'''
-    send(conn,f"Welcome ! {username}")
+    send(conn,f"Welcome ! {User.username}")
     global compteur_connecte
     compteur_connecte += 1
     if (compteur_connecte == 1):
-                send(conn,f"Vous êtes actuellement seul dans la salle.")
+        send(User.conn,f"Vous êtes actuellement seul dans la salle.")
+    else:
+        send(User.conn,f"Il y a actuellement dans la salle : {recuperer_utilisateurs()}")
+                
 
     # A chaque fois qu'on crée un thread de connexion, on affiche aux autres qu'on s'est connecté
-    broadcast(conn,message=f"{temps()} - {username} s'est connecté",self=False)
+    broadcast(User.conn,message=f"{temps()} - {User.username} s'est connecté",self=False)
 
     while True:
         try:
             # On attend la réception d'un message
 
 
-            message = receive(conn)
+            message = receive(User.conn)
 
             # Si on récupère un message
             if message:
-                print(f"{temps()} - {addr} - {username}: {message}".rstrip())
-                logging(f"{temps()} - {addr} - {username}: {message}\n",date)
-                broadcast(conn,f"{temps()} - {CYAN}{username}{END}: {message}")
+                print(f"{temps()} - {User.addr} - {User.username}: {message}".rstrip())
+                logging(f"{temps()} - {User.addr} - {User.username}: {message}\n",date)
+                broadcast(User.conn,f"{temps()} - {CYAN}{User.username}{END}: {message}")
 
-            # Si la connexion est rompue
+
+            # Si la connexion est rompue ( Client deconnecté )
             else:
-                if conn in client_list:
-                    client_list.remove(conn)
-                    print(f"{temps()} - {addr} - {username} s'est déconnecté")
-                    logging(f"{temps()} - {addr} - {username} s'est déconnecté\n",date)
-                    broadcast(conn,f"{temps()} - {username} s'est déconnecté")
-                    compteur_connecte -= 1
-                    if (compteur_connecte == 1):
-                        broadcast(conn,f"Vous êtes actuellement seul dans la salle.")
-        except:
+                for user in client_list:
+                    if user.conn == User.conn:
+                        client_list.remove(user)
+                        print(f"{temps()} - {User.addr} - {User.username} s'est déconnecté")
+                        logging(f"{temps()} - {User.addr} - {User.username} s'est déconnecté\n",date)
+                        broadcast(User.conn,f"{temps()} - {User.username} s'est déconnecté")
+                        compteur_connecte -= 1
+                        if (compteur_connecte == 1):
+                            broadcast(User.conn,f"Vous êtes actuellement seul dans la salle.")
+        
+        except: 
             continue
 
 
@@ -139,10 +162,11 @@ while True:
         print(f"{temps()} - {addr} - {username} s'est connecté")
         logging(f"{temps()} - {addr} - {username} s'est connecté\n", date)
 
-        client_list.append(conn)
+
+        client_list.append(User((conn,addr),username))
 
         # Creation of the thread
-        ct = threading.Thread(target=clientthread,args=(conn,addr,username))
+        ct = threading.Thread(target=clientthread,args=(User((conn,addr),username),))
         ct.start()
     except KeyboardInterrupt:
         serversocket.close()
